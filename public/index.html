@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="ne">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1115">
+<title>GPT AI Assistant</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #181b22; --panel2: #20242d; --line: #2c313c;
+    --text: #eef0f4; --muted: #9aa1ad; --accent: #3b82f6; --user: #2563eb;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Noto Sans Devanagari", "Mukta", system-ui, sans-serif;
+    background: var(--bg); color: var(--text);
+    display: flex; flex-direction: column; height: 100dvh;
+  }
+  button { font: inherit; color: inherit; cursor: pointer; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 17px; font-weight: 600; }
+  .status { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #777; }
+  .dot.on { background: #22c55e; } .dot.off { background: #ef4444; }
+  .ghost { background: none; border: 1px solid var(--line); color: var(--muted); padding: 6px 10px; border-radius: 8px; font-size: 13px; }
+
+  main { flex: 1; overflow-y: auto; padding: 16px 12px; }
+  .welcome { max-width: 640px; margin: 4vh auto 0; text-align: center; }
+  .welcome h2 { font-size: 26px; margin-bottom: 8px; }
+  .welcome p { color: var(--muted); margin-bottom: 22px; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; text-align: left; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; text-align: left; }
+  .card:hover { border-color: var(--accent); }
+  .card b { display: block; margin-bottom: 4px; font-size: 15px; }
+  .card span { color: var(--muted); font-size: 13px; }
+
+  .msgs { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+  .msg { max-width: 88%; padding: 10px 14px; border-radius: 16px; line-height: 1.65; word-wrap: break-word; }
+  .msg.user { align-self: flex-end; background: var(--user); border-bottom-right-radius: 4px; white-space: pre-wrap; }
+  .msg.model { align-self: flex-start; background: var(--panel2); border-bottom-left-radius: 4px; }
+  .msg.wide { max-width: 100%; width: 100%; }
+  .msg.error { align-self: center; background: #3b1d1d; color: #fca5a5; font-size: 14px; }
+  .msg .tag { font-size: 11px; opacity: .75; margin-bottom: 4px; }
+  .msg img.thumb { max-width: 200px; border-radius: 10px; display: block; margin-bottom: 6px; }
+  .msg img.gen { width: 100%; max-width: 480px; border-radius: 12px; display: block; }
+  .msg audio { width: 100%; margin-top: 4px; }
+  .msg pre { background: #0b0d11; padding: 10px; border-radius: 8px; overflow-x: auto; margin: 6px 0; font-size: 13px; }
+  .msg code { font-family: ui-monospace, monospace; font-size: 13px; }
+  .msg p { margin: 4px 0; } .msg ul, .msg ol { padding-left: 20px; margin: 4px 0; }
+  .msg h3, .msg h4 { margin: 8px 0 4px; font-size: 16px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .actions button, .actions a { background: var(--panel); border: 1px solid var(--line); color: var(--muted); font-size: 12px; padding: 5px 9px; border-radius: 8px; text-decoration: none; }
+  .actions button:hover, .actions a:hover { color: var(--text); }
+  iframe.site { width: 100%; height: 420px; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  .typing span { display: inline-block; width: 7px; height: 7px; margin: 0 2px; background: var(--muted); border-radius: 50%; animation: b 1.2s infinite; }
+  .typing span:nth-child(2) { animation-delay: .2s; } .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes b { 0%,80%,100% { opacity: .3; } 40% { opacity: 1; } }
+
+  footer { padding: 8px 10px calc(8px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+  .modes { max-width: 760px; margin: 0 auto 8px; display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .mode { flex: none; background: var(--panel); border: 1px solid var(--line); color: var(--muted); padding: 6px 12px; border-radius: 999px; font-size: 13px; }
+  .mode.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .composer { max-width: 760px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 8px; }
+  .preview { display: none; align-items: center; gap: 8px; padding: 4px 4px 8px; }
+  .preview img { width: 54px; height: 54px; object-fit: cover; border-radius: 8px; }
+  .preview button { background: var(--panel2); border: none; border-radius: 50%; width: 24px; height: 24px; }
+  .voiceopts { display: none; gap: 6px; padding: 0 4px 6px; }
+  .voiceopts select, .voiceopts input { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 8px; padding: 5px 8px; font: inherit; font-size: 13px; }
+  .voiceopts input { flex: 1; min-width: 0; }
+  textarea { width: 100%; background: none; border: none; outline: none; resize: none; color: var(--text); font: inherit; font-size: 16px; padding: 6px; max-height: 160px; }
+  .row { display: flex; align-items: center; gap: 6px; }
+  .tool { background: var(--panel2); border: none; padding: 8px 12px; border-radius: 12px; font-size: 14px; }
+  .tool.rec { background: #b91c1c; }
+  .tool.on { background: #14532d; }
+  .send { margin-left: auto; width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--accent); color: #fff; font-size: 18px; }
+  .send:disabled { opacity: .4; cursor: default; }
+  .note { text-align: center; font-size: 11px; color: var(--muted); margin-top: 6px; }
+
+  /* भिडियो स्टुडियो */
+  .studio { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+  .studio h2 { font-size: 20px; }
+  .box { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .box h3 { font-size: 15px; }
+  .box .hint { font-size: 12px; color: var(--muted); }
+  .box textarea, .box input[type=text], .box select { width: 100%; background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 15px; }
+  .box textarea { min-height: 110px; resize: vertical; }
+  .btns { display: flex; flex-wrap: wrap; gap: 6px; }
+  .btns button, .pick { background: var(--panel2); border: 1px solid var(--line); padding: 8px 12px; border-radius: 10px; font-size: 14px; }
+  .pick { display: inline-block; cursor: pointer; }
+  .primary { background: var(--accent) !important; border-color: var(--accent) !important; color: #fff; font-weight: 600; }
+  .thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); gap: 8px; }
+  .thumb { position: relative; aspect-ratio: 9/16; border-radius: 8px; overflow: hidden; background: #000; }
+  .thumb img, .thumb video { width: 100%; height: 100%; object-fit: cover; }
+  .thumb .n { position: absolute; top: 4px; left: 4px; background: rgba(0,0,0,.7); font-size: 11px; padding: 1px 6px; border-radius: 6px; }
+  .thumb .ctl { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: space-between; background: rgba(0,0,0,.6); }
+  .thumb .ctl button { background: none; border: none; padding: 4px 6px; font-size: 13px; }
+  .seg { display: flex; gap: 6px; }
+  .seg button { flex: 1; background: var(--panel2); border: 1px solid var(--line); padding: 7px; border-radius: 10px; font-size: 13px; }
+  .seg button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .rowx { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .rowx input[type=range] { flex: 1; }
+  .stage { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .stage canvas, .stage video { width: min(100%, 300px); aspect-ratio: 9/16; border-radius: 12px; background: #000; }
+  .bar { width: min(100%, 300px); height: 6px; background: var(--panel2); border-radius: 3px; overflow: hidden; }
+  .bar div { height: 100%; width: 0; background: var(--accent); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>GPT AI Assistant</h1>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">जाँच हुँदैछ…</span></div>
+  </div>
+  <button class="ghost" id="newChat">＋ नयाँ</button>
+</header>
+
+<main id="main">
+  <section class="welcome" id="welcome">
+    <h2>आज के बनाउन सक्छौँ?</h2>
+    <p>सोध्नुहोस्, फोटो बनाउनुहोस्, आवाज सुन्नुहोस् वा वेबसाइट बनाउनुहोस्।</p>
+    <div class="cards">
+      <button class="card" data-mode="chat" data-prompt="मलाई एउटा छोटो भिडियो स्क्रिप्ट लेखिदेऊ: "><b>💬 सोध्नुहोस्</b><span>प्रश्न, स्क्रिप्ट, समाचार, आइडिया</span></button>
+      <button class="card" data-mode="image" data-prompt="नेपाली क्रिकेट मैदानमा सूर्यास्तको सुन्दर दृश्य, "><b>🖼️ फोटो बनाउनुहोस्</b><span>लेखेर नयाँ फोटो, डाउनलोड पनि</span></button>
+      <button class="card" data-mode="voice" data-prompt="नमस्ते! आजको भिडियोमा स्वागत छ।"><b>🔊 आवाज बनाउनुहोस्</b><span>लेखलाई आवाजमा बदल्नुहोस्</span></button>
+      <button class="card" data-mode="site" data-prompt="मेरो क्रिकेट च्यानलको लागि एउटा सुन्दर वेबसाइट बनाइदेऊ, जसमा "><b>🌐 वेबसाइट बनाउनुहोस्</b><span>AI ले बनाउँछ, तुरुन्तै हेर्नुहोस्</span></button>
+    </div>
+  </section>
+  <div class="msgs" id="msgs"></div>
+
+  <!-- 🎬 भिडियो स्टुडियो -->
+  <section class="studio" id="studio" hidden>
+    <h2>🎬 ठाडो भिडियो बनाउने</h2>
+
+    <div class="box">
+      <h3>१. फोटो र भिडियो क्लिप</h3>
+      <div class="hint">क्रमैसँग देखिन्छन्। ◀ ▶ थिचेर क्रम मिलाउनुहोस्।</div>
+      <div><label class="pick">＋ फोटो/क्लिप थप्नुहोस्<input type="file" id="vMedia" accept="image/*,video/*" multiple hidden></label></div>
+      <div class="thumbs" id="vThumbs"></div>
+    </div>
+
+    <div class="box">
+      <h3>२. आवाज (भ्वाइसओभर)</h3>
+      <div class="seg" id="vVoiceSrc">
+        <button data-v="ai" class="on">🎤 AI आवाज</button>
+        <button data-v="file">📁 आफ्नो आवाज</button>
+        <button data-v="none">🔇 आवाज नचाहिने</button>
+      </div>
+      <div id="vAiBox">
+        <textarea id="vScript" placeholder="यहाँ स्क्रिप्ट लेख्नुहोस्। वा विषय मात्र लेखेर '✍️ AI स्क्रिप्ट' थिच्नुहोस्।"></textarea>
+        <div class="hint">eleven_v3 मा [excited], [whispers] जस्ता ट्याग राखेर भाव थप्न मिल्छ।</div>
+        <select id="vVoice"></select>
+        <div class="btns">
+          <button id="vWrite">✍️ AI स्क्रिप्ट</button>
+          <button id="vMakeVoice">🎤 आवाज बनाउने</button>
+        </div>
+      </div>
+      <div id="vFileBox" hidden>
+        <label class="pick">📁 mp3/आवाज फाइल छान्नुहोस्<input type="file" id="vVoiceFile" accept="audio/*" hidden></label>
+        <div class="hint">सबटाइटल चाहिए माथिको स्क्रिप्ट बाकसमा बोलेको कुरा लेख्नुहोस्।</div>
+      </div>
+      <audio id="vVoicePlayer" controls hidden></audio>
+    </div>
+
+    <div class="box">
+      <h3>३. ब्याकग्राउन्ड म्युजिक</h3>
+      <div class="seg" id="vMusicSrc">
+        <button data-v="dhol" class="on">🥁 ढोल बिट</button>
+        <button data-v="file">📁 आफ्नो गीत</button>
+        <button data-v="none">🔇 नचाहिने</button>
+      </div>
+      <label class="pick" id="vMusicPick" hidden>📁 म्युजिक फाइल छान्नुहोस्<input type="file" id="vMusicFile" accept="audio/*" hidden></label>
+      <div class="rowx">🔉 आवाज <input type="range" id="vMusicVol" min="0" max="100" value="25"> <span id="vMusicVolT">25%</span></div>
+      <div class="rowx" id="vBpmRow">🥁 गति <input type="range" id="vBpm" min="70" max="140" value="100"> <span id="vBpmT">100</span></div>
+    </div>
+
+    <div class="box">
+      <h3>४. लेख र सबटाइटल</h3>
+      <input type="text" id="vTitle" placeholder="माथि देखिने शीर्षक (जस्तै: NPL ताजा खबर 🔥)">
+      <input type="text" id="vHandle" placeholder="च्यानलको नाम (जस्तै: @sagarcricketnepal)">
+      <label class="rowx"><input type="checkbox" id="vSubs" checked> स्क्रिप्टबाट सबटाइटल देखाउने</label>
+    </div>
+
+    <div class="box">
+      <div class="btns"><button class="primary" id="vRender">▶️ भिडियो बनाउने</button></div>
+      <div class="hint" id="vInfo">भिडियो बनाउँदा आवाजको लम्बाइ जति समय लाग्छ। त्यतिन्जेल यो पेज नछोड्नुहोस्।</div>
+      <div class="stage">
+        <canvas id="vCanvas" width="720" height="1280" hidden></canvas>
+        <div class="bar" id="vBar" hidden><div></div></div>
+        <video id="vOut" controls playsinline hidden></video>
+        <div class="btns" id="vOutBtns" hidden></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="modes" id="modes">
+    <button class="mode active" data-mode="chat">💬 कुराकानी</button>
+    <button class="mode" data-mode="image">🖼️ फोटो बनाउने</button>
+    <button class="mode" data-mode="voice">🔊 आवाज</button>
+    <button class="mode" data-mode="site">🌐 वेबसाइट</button>
+    <button class="mode" data-mode="video">🎬 भिडियो</button>
+  </div>
+  <div class="composer" id="composer">
+    <div class="preview" id="preview"><img id="previewImg" alt=""><button id="removeImg" title="हटाउनुहोस्">✕</button></div>
+    <div class="voiceopts" id="voiceopts">
+      <select id="voiceSel">
+        <option value="eleven" hidden>🎤 Bunty (ElevenLabs)</option>
+        <option value="Kore">Kore (महिला)</option>
+        <option value="Puck">Puck (पुरुष, जोसिलो)</option>
+        <option value="Charon">Charon (पुरुष, गम्भीर)</option>
+        <option value="Fenrir">Fenrir (पुरुष, उत्साही)</option>
+        <option value="Aoede">Aoede (महिला, हल्का)</option>
+        <option value="Zephyr">Zephyr (महिला, उज्यालो)</option>
+      </select>
+      <input id="styleInp" placeholder="शैली, जस्तै: उत्साहित भएर बोल">
+    </div>
+    <textarea id="input" rows="1" placeholder="GPT लाई केही सोध्नुहोस्…"></textarea>
+    <div class="row">
+      <button class="tool" id="fileBtn" title="फोटो थप्नुहोस्">＋ फोटो</button>
+      <button class="tool" id="micBtn" title="बोलेर लेख्नुहोस्">🎙</button>
+      <button class="tool" id="autoSpeak" title="उत्तर आफैँ बोलोस्">🔈 बोल्ने: बन्द</button>
+      <input type="file" id="fileInput" accept="image/*" hidden>
+      <button class="send" id="sendBtn" disabled>↑</button>
+    </div>
+  </div>
+  <div class="note" id="note">GPT ले गल्ती गर्न सक्छ। महत्त्वपूर्ण कुरा आफैँ जाँच्नुहोस्।</div>
+</footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const input = $("input"), sendBtn = $("sendBtn"), msgs = $("msgs"), main = $("main");
+
+let mode = "chat";
+let history = [];       // कुराकानीको इतिहास
+let image = null;       // { mimeType, data, url }
+let lastHtml = "";      // पछिल्लो बनेको वेबसाइट (परिवर्तनका लागि)
+let busy = false;
+let autoSpeak = false;
+let elevenReady = false;
+let accessCode = "";
+try { accessCode = localStorage.getItem("gpt_code") || ""; } catch {}
+
+const PLACEHOLDER = {
+  chat: "GPT लाई केही सोध्नुहोस्…",
+  image: "कस्तो फोटो बनाउने? (फोटो थपे त्यसलाई सम्पादन गर्छ)",
+  voice: "आवाजमा बदल्ने लेख यहाँ लेख्नुहोस्…",
+  site: "कस्तो वेबसाइट बनाउने? (बनेपछि परिवर्तन पनि भन्न मिल्छ)",
+};
+
+// ---------- सर्भरको अवस्था ----------
+fetch("/api/status").then(r => r.json()).then(s => {
+  $("dot").className = "dot " + (s.ready ? "on" : "off");
+  $("statusText").textContent = s.ready ? "AI जोडिएको छ" + (s.eleven ? " · 🎤 Bunty" : "") : "API key सेट छैन";
+  elevenReady = Boolean(s.eleven);
+  if (elevenReady) {
+    const o = $("voiceSel").querySelector('option[value="eleven"]');
+    o.hidden = false; $("voiceSel").value = "eleven";
+  }
+  fillStudioVoices();
+  if (s.needCode && !accessCode) askCode();
+}).catch(() => { $("dot").className = "dot off"; $("statusText").textContent = "सर्भरसँग जोडिन सकेन"; });
+
+function askCode() {
+  const c = prompt("यो वेबसाइट चलाउन पहुँच कोड चाहिन्छ:");
+  if (c) { accessCode = c.trim(); try { localStorage.setItem("gpt_code", accessCode); } catch {} }
+}
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-access-code": accessCode },
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && data.needCode) { askCode(); throw new Error("पहुँच कोड मिलेन। फेरि पठाउनुहोस्।"); }
+  if (!res.ok) throw new Error(data.error || "केही गडबड भयो।");
+  return data;
+}
+
+// ---------- मोड ----------
+function setMode(m) {
+  mode = m;
+  const video = m === "video";
+  $("studio").hidden = !video;
+  $("composer").hidden = video;
+  $("note").hidden = video;
+  msgs.hidden = video;
+  $("welcome").hidden = video || msgs.children.length > 0;
+  if (video) { main.scrollTop = 0; document.querySelectorAll(".mode").forEach(b => b.classList.toggle("active", b.dataset.mode === m)); return; }
+  document.querySelectorAll(".mode").forEach(b => b.classList.toggle("active", b.dataset.mode === m));
+  input.placeholder = PLACEHOLDER[m];
+  $("voiceopts").style.display = m === "voice" ? "flex" : "none";
+  $("fileBtn").style.display = (m === "chat" || m === "image") ? "" : "none";
+  $("autoSpeak").style.display = m === "chat" ? "" : "none";
+  if (m === "voice" || m === "site") clearImage();
+}
+document.querySelectorAll(".mode").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+document.querySelectorAll(".card").forEach(c => c.onclick = () => {
+  setMode(c.dataset.mode); input.value = c.dataset.prompt; input.focus(); resize(); updateSend();
+});
+
+$("autoSpeak").onclick = () => {
+  autoSpeak = !autoSpeak;
+  $("autoSpeak").classList.toggle("on", autoSpeak);
+  $("autoSpeak").textContent = autoSpeak ? "🔊 बोल्ने: चालु" : "🔈 बोल्ने: बन्द";
+};
+
+$("newChat").onclick = () => {
+  history = []; lastHtml = ""; msgs.innerHTML = ""; clearImage();
+  if (mode === "video") setMode("chat");
+  $("welcome").hidden = false; $("welcome").style.display = "";
+};
+
+// ---------- लेख्ने ठाउँ ----------
+function resize() { input.style.height = "auto"; input.style.height = Math.min(input.scrollHeight, 160) + "px"; }
+function updateSend() { sendBtn.disabled = busy || (!input.value.trim() && !image); }
+input.addEventListener("input", () => { resize(); updateSend(); });
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && window.innerWidth > 700) { e.preventDefault(); send(); }
+});
+sendBtn.onclick = send;
+
+// ---------- फोटो ----------
+$("fileBtn").onclick = () => $("fileInput").click();
+$("fileInput").onchange = (e) => {
+  const f = e.target.files[0]; e.target.value = "";
+  if (!f) return;
+  if (!f.type.startsWith("image/")) return showError("अहिले फोटो मात्र पठाउन मिल्छ।");
+  if (f.size > 8 * 1024 * 1024) return showError("फोटो ८ MB भन्दा सानो हुनुपर्छ।");
+  const reader = new FileReader();
+  reader.onload = () => {
+    image = { mimeType: f.type, data: reader.result.split(",")[1], url: reader.result };
+    $("previewImg").src = reader.result; $("preview").style.display = "flex"; updateSend();
+  };
+  reader.readAsDataURL(f);
+};
+$("removeImg").onclick = clearImage;
+function clearImage() { image = null; $("preview").style.display = "none"; updateSend(); }
+
+// ---------- बोलेर लेख्ने (Chrome) ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+$("micBtn").onclick = () => {
+  if (!SR) return showError("यो browser मा बोलेर लेख्ने सुविधा छैन। Chrome प्रयोग गर्नुहोस्।");
+  if (rec) { rec.stop(); return; }
+  rec = new SR(); rec.lang = "ne-NP"; rec.interimResults = true;
+  const before = input.value;
+  rec.onresult = (e) => {
+    let t = ""; for (const r of e.results) t += r[0].transcript;
+    input.value = (before ? before + " " : "") + t; resize(); updateSend();
+  };
+  rec.onend = () => { rec = null; $("micBtn").classList.remove("rec"); };
+  rec.onerror = () => showError("आवाज बुझ्न सकिएन। माइक अनुमति जाँच्नुहोस्।");
+  rec.start(); $("micBtn").classList.add("rec");
+};
+
+// ---------- सन्देश देखाउने ----------
+function esc(s) { return s.replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+
+// सानो markdown: **bold**, `code`, ```block```, सूची, शीर्षक
+function md(text) {
+  const blocks = [];
+  let s = esc(text).replace(/```(\w*)\n?([\s\S]*?)```/g, (_, l, code) => {
+    blocks.push("<pre><code>" + code + "</code></pre>"); return "\u0000" + (blocks.length - 1) + "\u0000";
+  });
+  s = s.replace(/`([^`\n]+)`/g, "<code>$1</code>")
+       .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
+  const out = []; let list = null;
+  for (const line of s.split("\n")) {
+    const ul = /^\s*[-*•]\s+(.*)/.exec(line), ol = /^\s*\d+[.)]\s+(.*)/.exec(line), h = /^#{1,4}\s+(.*)/.exec(line);
+    const type = ul ? "ul" : ol ? "ol" : null;
+    if (list && list !== type) { out.push(`</${list}>`); list = null; }
+    if (type) { if (!list) { out.push(`<${type}>`); list = type; } out.push("<li>" + (ul || ol)[1] + "</li>"); }
+    else if (h) out.push("<h4>" + h[1] + "</h4>");
+    else if (/^\u0000\d+\u0000$/.test(line.trim())) out.push(line.trim());
+    else if (line.trim()) out.push("<p>" + line + "</p>");
+  }
+  if (list) out.push(`</${list}>`);
+  return out.join("").replace(/\u0000(\d+)\u0000/g, (_, i) => blocks[i]);
+}
+
+function bubble(role, cls = "") {
+  $("welcome").style.display = "none";
+  const div = document.createElement("div");
+  div.className = "msg " + role + (cls ? " " + cls : "");
+  msgs.appendChild(div);
+  scrollDown();
+  return div;
+}
+function scrollDown() { main.scrollTop = main.scrollHeight; }
+function showError(t) { bubble("error").textContent = t; }
+function typing() { const d = bubble("model"); d.innerHTML = '<span class="typing"><span></span><span></span><span></span></span>'; return d; }
+
+function btn(label, fn) { const b = document.createElement("button"); b.textContent = label; b.onclick = fn; return b; }
+function link(label, href, filename) { const a = document.createElement("a"); a.textContent = label; a.href = href; a.download = filename; return a; }
+function actions(parent, ...items) { const d = document.createElement("div"); d.className = "actions"; items.forEach(i => d.appendChild(i)); parent.appendChild(d); }
+function stamp() { return new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-"); }
+
+function b64ToBlobUrl(b64, mime) {
+  const bin = atob(b64); const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return URL.createObjectURL(new Blob([arr], { type: mime }));
+}
+
+// उत्तरलाई आवाजमा सुनाउने
+// voice "eleven" भए ElevenLabs, नत्र Gemini
+async function makeVoice(text, voice, style = "") {
+  if (voice === "eleven") return api("/api/eleven", { text: style ? `[${style}] ${text}` : text });
+  return api("/api/tts", { text, voice, style });
+}
+
+async function speak(text, holder, voice = elevenReady ? "eleven" : "Kore", style = "") {
+  const wait = document.createElement("div"); wait.className = "tag"; wait.textContent = "🔊 आवाज बन्दैछ…";
+  holder.appendChild(wait); scrollDown();
+  try {
+    const data = await makeVoice(text, voice, style);
+    wait.remove();
+    const url = b64ToBlobUrl(data.audio, data.mimeType);
+    const audio = document.createElement("audio"); audio.controls = true; audio.src = url;
+    holder.appendChild(audio);
+    const ext = data.mimeType.includes("mpeg") ? "mp3" : "wav";
+    actions(holder, link("⬇️ आवाज डाउनलोड", url, `gpt-awaj-${stamp()}.${ext}`));
+    audio.play().catch(() => {});
+    scrollDown();
+  } catch (e) { wait.textContent = "⚠️ " + e.message; }
+}
+
+// ---------- पठाउने ----------
+async function send() {
+  const text = input.value.trim();
+  if (busy || (!text && !image)) return;
+  busy = true; updateSend();
+  const img = image;
+
+  const u = bubble("user");
+  if (img) { const im = document.createElement("img"); im.className = "thumb"; im.src = img.url; u.appendChild(im); }
+  if (text) u.appendChild(document.createTextNode(text));
+  input.value = ""; resize(); clearImage();
+
+  const t = typing();
+  try {
+    if (mode === "chat") await doChat(text, img, t);
+    else if (mode === "image") await doImage(text, img, t);
+    else if (mode === "voice") await doVoice(text, t);
+    else if (mode === "site") await doSite(text, t);
+  } catch (e) {
+    t.remove(); showError(e.message || "सर्भरसँग जोडिन सकेन।");
+  } finally {
+    busy = false; updateSend(); input.focus();
+  }
+}
+
+async function doChat(text, img, t) {
+  const data = await api("/api/chat", { message: text, history, image: img ? { mimeType: img.mimeType, data: img.data } : undefined });
+  t.remove();
+  const d = bubble("model");
+  d.innerHTML = md(data.reply);
+  actions(d,
+    btn("🔊 सुन्नुहोस्", (e) => { e.target.disabled = true; speak(data.reply, d); }),
+    btn("📋 Copy", (e) => { navigator.clipboard?.writeText(data.reply); e.target.textContent = "✅ Copy भयो"; })
+  );
+  history.push({ role: "user", text: text || "[फोटो पठाइयो]" }, { role: "model", text: data.reply });
+  if (autoSpeak) speak(data.reply, d);
+  scrollDown();
+}
+
+async function doImage(text, img, t) {
+  if (!text) throw new Error("कस्तो फोटो बनाउने हो, लेख्नुहोस्।");
+  const data = await api("/api/image", { prompt: text, image: img ? { mimeType: img.mimeType, data: img.data } : undefined });
+  t.remove();
+  const d = bubble("model");
+  d.innerHTML = '<div class="tag">🖼️ बनेको फोटो</div>';
+  data.images.forEach((im, i) => {
+    const url = b64ToBlobUrl(im.data, im.mimeType);
+    const el = document.createElement("img"); el.className = "gen"; el.src = url; el.alt = text;
+    d.appendChild(el);
+    const ext = (im.mimeType.split("/")[1] || "png").replace("jpeg", "jpg");
+    actions(d, link("⬇️ फोटो डाउनलोड", url, `gpt-photo-${stamp()}-${i + 1}.${ext}`));
+  });
+  if (data.text) { const p = document.createElement("p"); p.textContent = data.text; d.appendChild(p); }
+  scrollDown();
+}
+
+async function doVoice(text, t) {
+  if (!text) throw new Error("आवाजमा बदल्ने लेख लेख्नुहोस्।");
+  t.remove();
+  const d = bubble("model");
+  d.innerHTML = '<div class="tag">🔊 ' + esc($("voiceSel").selectedOptions[0].textContent) + "</div>";
+  await speak(text, d, $("voiceSel").value, $("styleInp").value.trim());
+}
+
+async function doSite(text, t) {
+  if (!text) throw new Error("कस्तो वेबसाइट बनाउने हो, लेख्नुहोस्।");
+  const data = await api("/api/website", { prompt: text, currentHtml: lastHtml || undefined });
+  t.remove();
+  lastHtml = data.html;
+  const d = bubble("model", "wide");
+  d.innerHTML = '<div class="tag">🌐 वेबसाइट तयार भयो · परिवर्तन चाहिए तल लेख्नुहोस्</div>';
+  const frame = document.createElement("iframe");
+  frame.className = "site"; frame.sandbox = "allow-scripts allow-forms allow-modals"; frame.srcdoc = data.html;
+  d.appendChild(frame);
+  const url = URL.createObjectURL(new Blob([data.html], { type: "text/html" }));
+  actions(d,
+    btn("⛶ पूरा स्क्रिन", () => window.open(url, "_blank")),
+    link("⬇️ HTML डाउनलोड", url, `gpt-website-${stamp()}.html`),
+    btn("📋 Code copy", (e) => { navigator.clipboard?.writeText(data.html); e.target.textContent = "✅ Copy भयो"; })
+  );
+  scrollDown();
+}
+
+// =====================================================
+// 🎬 भिडियो स्टुडियो (सबै काम browser मै हुन्छ)
+// =====================================================
+const V = { items: [], voiceBuf: null, voiceSrc: "ai", musicSrc: "dhol", musicBuf: null, busy: false };
+
+function fillStudioVoices() {
+  const sel = $("vVoice"); sel.innerHTML = "";
+  if (elevenReady) sel.add(new Option("🎤 Bunty (ElevenLabs)", "eleven"));
+  [...$("voiceSel").options].filter(o => o.value !== "eleven").forEach(o => sel.add(new Option(o.textContent + " · Gemini", o.value)));
+}
+fillStudioVoices();
+
+function segInit(id, key, onChange) {
+  $(id).querySelectorAll("button").forEach(b => b.onclick = () => {
+    $(id).querySelectorAll("button").forEach(x => x.classList.toggle("on", x === b));
+    V[key] = b.dataset.v; onChange && onChange(b.dataset.v);
+  });
+}
+segInit("vVoiceSrc", "voiceSrc", v => {
+  $("vAiBox").hidden = v === "none";
+  $("vFileBox").hidden = v !== "file";
+  $("vVoice").hidden = $("vMakeVoice").hidden = v !== "ai";
+  if (v === "none") { V.voiceBuf = null; $("vVoicePlayer").hidden = true; }
+});
+segInit("vMusicSrc", "musicSrc", v => {
+  $("vMusicPick").hidden = v !== "file";
+  $("vBpmRow").hidden = v !== "dhol";
+});
+$("vMusicVol").oninput = () => $("vMusicVolT").textContent = $("vMusicVol").value + "%";
+$("vBpm").oninput = () => $("vBpmT").textContent = $("vBpm").value;
+
+// फोटो/क्लिप थप्ने
+$("vMedia").onchange = (e) => {
+  for (const f of e.target.files) {
+    const type = f.type.startsWith("video/") ? "video" : f.type.startsWith("image/") ? "image" : null;
+    if (type) V.items.push({ type, url: URL.createObjectURL(f) });
+  }
+  e.target.value = ""; drawThumbs();
+};
+function drawThumbs() {
+  const box = $("vThumbs"); box.innerHTML = "";
+  V.items.forEach((it, i) => {
+    const d = document.createElement("div"); d.className = "thumb";
+    const m = document.createElement(it.type === "video" ? "video" : "img");
+    m.src = it.url; if (it.type === "video") { m.muted = true; m.playsInline = true; }
+    d.appendChild(m);
+    d.insertAdjacentHTML("beforeend", `<span class="n">${i + 1}${it.type === "video" ? " 🎞" : ""}</span>`);
+    const c = document.createElement("div"); c.className = "ctl";
+    c.append(
+      btn("◀", () => { if (i > 0) { [V.items[i - 1], V.items[i]] = [V.items[i], V.items[i - 1]]; drawThumbs(); } }),
+      btn("✕", () => { V.items.splice(i, 1); drawThumbs(); }),
+      btn("▶", () => { if (i < V.items.length - 1) { [V.items[i + 1], V.items[i]] = [V.items[i], V.items[i + 1]]; drawThumbs(); } })
+    );
+    d.appendChild(c); box.appendChild(d);
+  });
+}
+
+// AI बाट स्क्रिप्ट
+$("vWrite").onclick = async (e) => {
+  const topic = $("vScript").value.trim();
+  if (!topic) return alert("पहिले विषय लेख्नुहोस्, जस्तै: आजको NPL खेलको नतिजा");
+  e.target.disabled = true; e.target.textContent = "✍️ लेख्दैछ…";
+  try {
+    const data = await api("/api/chat", {
+      message: `यो विषयमा ३०–४० सेकेन्डको ठाडो (Reels/Shorts) भिडियोको नेपाली भ्वाइसओभर स्क्रिप्ट लेखिदेऊ: "${topic}"। ` +
+        "पहिलो वाक्य ध्यान तान्ने hook होस्। छोटा, जोसिला वाक्य। अन्त्यमा follow/subscribe गर्न आग्रह। " +
+        "शीर्षक, emoji, दृश्य निर्देशन वा व्याख्या नलेख, बोल्ने कुरा मात्र देऊ।",
+      history: [],
+    });
+    $("vScript").value = data.reply.replace(/[*#]/g, "").trim();
+  } catch (err) { alert(err.message); }
+  e.target.disabled = false; e.target.textContent = "✍️ AI स्क्रिप्ट";
+};
+
+// AI आवाज बनाउने
+function b64ToArrayBuffer(b64) { const bin = atob(b64); const a = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) a[i] = bin.charCodeAt(i); return a.buffer; }
+$("vMakeVoice").onclick = async (e) => {
+  const text = $("vScript").value.trim();
+  if (!text) return alert("पहिले स्क्रिप्ट लेख्नुहोस्।");
+  e.target.disabled = true; e.target.textContent = "🎤 बन्दैछ…";
+  try {
+    const data = await makeVoice(text, $("vVoice").value);
+    V.voiceBuf = b64ToArrayBuffer(data.audio);
+    V.voiceExt = data.mimeType.includes("mpeg") ? "mp3" : "wav";
+    showVoice(new Blob([V.voiceBuf], { type: data.mimeType }));
+  } catch (err) { alert(err.message); }
+  e.target.disabled = false; e.target.textContent = "🎤 आवाज बनाउने";
+};
+$("vVoiceFile").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  V.voiceBuf = await f.arrayBuffer(); V.voiceExt = (f.name.split(".").pop() || "mp3").toLowerCase(); showVoice(f);
+};
+function showVoice(blob) { const p = $("vVoicePlayer"); p.src = URL.createObjectURL(blob); p.hidden = false; }
+$("vMusicFile").onchange = async (e) => { const f = e.target.files[0]; if (f) V.musicBuf = await f.arrayBuffer(); };
+
+// ---------- ढोल बिट (WebAudio बाट आफैँ बनाइएको) ----------
+function scheduleDhol(ctx, out, start, dur, bpm) {
+  const noise = ctx.createBuffer(1, ctx.sampleRate * 0.3, ctx.sampleRate);
+  const nd = noise.getChannelData(0); for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  const step = 60 / bpm / 2;                                   // आठौँ भाग
+  // धा(बेस)=1, ता(चट्ट)=2, दुवै=3, खाली=0 : भाङ्ग्रा/ढोल शैलीको ८ स्टेप
+  const pattern = [1, 0, 2, 1, 0, 2, 3, 2];
+  const dha = (t, v) => {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = "sine"; o.frequency.setValueAtTime(130, t); o.frequency.exponentialRampToValueAtTime(48, t + 0.28);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.005); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    o.connect(g).connect(out); o.start(t); o.stop(t + 0.45);
+  };
+  const ta = (t, v) => {
+    const s = ctx.createBufferSource(); s.buffer = noise;
+    const f = ctx.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 2200; f.Q.value = 0.9;
+    const g = ctx.createGain(); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.12);
+    s.connect(f).connect(g).connect(out); s.start(t); s.stop(t + 0.15);
+    const o = ctx.createOscillator(), g2 = ctx.createGain();
+    o.type = "triangle"; o.frequency.setValueAtTime(380, t); o.frequency.exponentialRampToValueAtTime(260, t + 0.08);
+    g2.gain.setValueAtTime(v * 0.5, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    o.connect(g2).connect(out); o.start(t); o.stop(t + 0.12);
+  };
+  for (let i = 0, t = start; t < start + dur; i++, t += step) {
+    const p = pattern[i % 8], accent = i % 8 === 0 ? 1 : 0.75;
+    if (p & 1) dha(t, 0.9 * accent);
+    if (p & 2) ta(t, 0.5 * accent);
+  }
+}
+
+// ---------- चित्र कोर्ने सहायक ----------
+function loadItem(it) {
+  return new Promise((ok, bad) => {
+    if (it.type === "image") { const im = new Image(); im.onload = () => ok(im); im.onerror = bad; im.src = it.url; }
+    else {
+      const v = document.createElement("video"); v.muted = true; v.playsInline = true; v.preload = "auto";
+      v.onloadeddata = () => ok(v); v.onerror = bad; v.src = it.url;
+    }
+  });
+}
+function drawCover(c, el, scale, alpha) {
+  const W = c.canvas.width, H = c.canvas.height;
+  const w = el.videoWidth || el.naturalWidth, h = el.videoHeight || el.naturalHeight;
+  if (!w || !h) return;
+  const s = Math.max(W / w, H / h) * scale;
+  c.globalAlpha = alpha;
+  c.drawImage(el, (W - w * s) / 2, (H - h * s) / 2, w * s, h * s);
+  c.globalAlpha = 1;
+}
+function wrapLines(c, text, maxW) {
+  const words = text.split(/\s+/), lines = []; let line = "";
+  for (const w of words) {
+    const test = line ? line + " " + w : w;
+    if (c.measureText(test).width > maxW && line) { lines.push(line); line = w; } else line = test;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+function drawTextBox(c, text, y, size, bg) {
+  const W = c.canvas.width;
+  c.font = `700 ${size}px "Noto Sans Devanagari", "Mukta", sans-serif`;
+  c.textAlign = "center"; c.textBaseline = "middle";
+  const lines = wrapLines(c, text, W * 0.84), lh = size * 1.35;
+  const boxH = lines.length * lh + size * 0.6;
+  const boxW = Math.min(W * 0.92, Math.max(...lines.map(l => c.measureText(l).width)) + size * 1.2);
+  c.fillStyle = bg; c.beginPath();
+  c.roundRect ? c.roundRect((W - boxW) / 2, y - boxH / 2, boxW, boxH, 18) : c.rect((W - boxW) / 2, y - boxH / 2, boxW, boxH);
+  c.fill();
+  lines.forEach((l, i) => {
+    const ly = y - boxH / 2 + size * 0.3 + lh * i + lh / 2;
+    c.lineWidth = size * 0.14; c.strokeStyle = "rgba(0,0,0,.85)"; c.strokeText(l, W / 2, ly);
+    c.fillStyle = "#fff"; c.fillText(l, W / 2, ly);
+  });
+}
+function subtitleChunks(text) {
+  const clean = text.replace(/\[[^\]]*\]/g, " ").replace(/\s+/g, " ").trim();
+  if (!clean) return [];
+  const out = [];
+  for (const sentence of clean.split(/(?<=[।!?.])\s+/)) {
+    const w = sentence.split(" ");
+    for (let i = 0; i < w.length; i += 5) out.push(w.slice(i, i + 5).join(" "));
+  }
+  // लामो टुक्रा बढी समय देखिओस् भनेर अक्षर गनेर तौल
+  const total = out.reduce((a, s) => a + s.length, 0);
+  let acc = 0;
+  return out.map(s => { const from = acc / total; acc += s.length; return { text: s, from, to: acc / total }; });
+}
+function pickMime() {
+  const list = ["video/mp4;codecs=avc1,mp4a", "video/mp4", "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"];
+  return list.find(m => window.MediaRecorder && MediaRecorder.isTypeSupported(m)) || "";
+}
+
+// ---------- भिडियो बनाउने ----------
+$("vRender").onclick = async () => {
+  if (V.busy) return;
+  if (!V.items.length) return alert("कम्तीमा एउटा फोटो वा क्लिप थप्नुहोस्।");
+  if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) return alert("यो browser मा भिडियो बनाउन मिल्दैन। Chrome प्रयोग गर्नुहोस्।");
+  if (V.voiceSrc !== "none" && !V.voiceBuf && !confirm("आवाज बनाइएको छैन। आवाजबिनै भिडियो बनाउने?")) return;
+  if (V.musicSrc === "file" && !V.musicBuf) return alert("म्युजिक फाइल छान्नुहोस् वा ढोल बिट रोज्नुहोस्।");
+
+  V.busy = true; $("vRender").disabled = true;
+  const info = $("vInfo"), canvas = $("vCanvas"), c = canvas.getContext("2d"), bar = $("vBar");
+  $("vOut").hidden = true; $("vOutBtns").hidden = true; canvas.hidden = false; bar.hidden = false;
+  info.textContent = "तयारी हुँदैछ…";
+
+  let actx;
+  try {
+    const els = await Promise.all(V.items.map(loadItem));
+    actx = new (window.AudioContext || window.webkitAudioContext)();
+    await actx.resume();
+    const dest = actx.createMediaStreamDestination();
+    const master = actx.createGain(); master.gain.value = 0.85; master.connect(dest); master.connect(actx.destination);
+
+    let voice = null;
+    if (V.voiceSrc !== "none" && V.voiceBuf) voice = await actx.decodeAudioData(V.voiceBuf.slice(0));
+    const D = voice ? voice.duration + 0.8 : Math.max(V.items.length * 3, 3);
+
+    const t0 = actx.currentTime + 0.3;
+    if (voice) { const s = actx.createBufferSource(); s.buffer = voice; s.connect(master); s.start(t0 + 0.2); }
+
+    const mg = actx.createGain(); mg.connect(master);
+    const vol = $("vMusicVol").value / 100;
+    mg.gain.setValueAtTime(vol, t0); mg.gain.setValueAtTime(vol, t0 + D - 1); mg.gain.linearRampToValueAtTime(0.0001, t0 + D);
+    if (V.musicSrc === "file") {
+      const mb = await actx.decodeAudioData(V.musicBuf.slice(0));
+      const s = actx.createBufferSource(); s.buffer = mb; s.loop = true; s.connect(mg); s.start(t0); s.stop(t0 + D);
+    } else if (V.musicSrc === "dhol") {
+      scheduleDhol(actx, mg, t0, D, Number($("vBpm").value));
+    }
+
+    const subs = $("vSubs").checked ? subtitleChunks($("vScript").value) : [];
+    const subSpan = voice ? voice.duration : D, title = $("vTitle").value.trim(), handle = $("vHandle").value.trim();
+
+    const stream = canvas.captureStream(30);
+    dest.stream.getAudioTracks().forEach(tr => stream.addTrack(tr));
+    const mime = pickMime();
+    const rec = new MediaRecorder(stream, mime ? { mimeType: mime, videoBitsPerSecond: 5_000_000 } : undefined);
+    const chunks = []; rec.ondataavailable = e => e.data.size && chunks.push(e.data);
+    const done = new Promise(r => rec.onstop = r);
+
+    const n = els.length, seg = D / n, fade = Math.min(0.45, seg / 3);
+    let current = -1;
+    const frame = () => {
+      const t = actx.currentTime - t0;
+      c.fillStyle = "#000"; c.fillRect(0, 0, canvas.width, canvas.height);
+      if (t >= 0) {
+        const i = Math.min(Math.floor(t / seg), n - 1), local = t - i * seg;
+        if (i !== current) {
+          if (els[current]?.pause) els[current].pause();
+          if (els[i].play) { els[i].currentTime = 0; els[i].play().catch(() => {}); }
+          current = i;
+        }
+        if (i > 0 && local < fade) drawCover(c, els[i - 1], 1.08, 1);
+        drawCover(c, els[i], 1 + 0.08 * (local / seg), i > 0 && local < fade ? local / fade : 1);
+
+        // माथि-तल अँध्यारो छाया (लेख प्रस्ट देखियोस्)
+        const g1 = c.createLinearGradient(0, 0, 0, 300); g1.addColorStop(0, "rgba(0,0,0,.55)"); g1.addColorStop(1, "rgba(0,0,0,0)");
+        c.fillStyle = g1; c.fillRect(0, 0, canvas.width, 300);
+        if (title) drawTextBox(c, title, 140, 50, "rgba(220,38,38,.92)");
+        const st = t - 0.2;
+        const sub = subs.find(s => st >= s.from * subSpan && st < s.to * subSpan);
+        if (sub) drawTextBox(c, sub.text, canvas.height * 0.74, 46, "rgba(0,0,0,.55)");
+        if (handle) { c.font = '600 28px "Noto Sans Devanagari", sans-serif'; c.textAlign = "center"; c.fillStyle = "rgba(255,255,255,.85)"; c.fillText(handle, canvas.width / 2, canvas.height - 70); }
+      }
+      bar.firstElementChild.style.width = Math.min(100, Math.max(0, t / D * 100)) + "%";
+      info.textContent = `भिडियो बन्दैछ… ${Math.max(0, Math.floor(t))} / ${Math.ceil(D)} सेकेन्ड`;
+      if (t < D) requestAnimationFrame(frame); else rec.stop();
+    };
+    rec.start(500);
+    requestAnimationFrame(frame);
+    await done;
+    els.forEach(el => el.pause && el.pause());
+
+    const type = rec.mimeType || mime || "video/webm";
+    const blob = new Blob(chunks, { type });
+    const url = URL.createObjectURL(blob), ext = type.includes("mp4") ? "mp4" : "webm";
+    canvas.hidden = true; bar.hidden = true;
+    const out = $("vOut"); out.src = url; out.hidden = false;
+    const ob = $("vOutBtns"); ob.innerHTML = ""; ob.hidden = false;
+    ob.append(link("⬇️ भिडियो डाउनलोड", url, `gpt-video-${stamp()}.${ext}`));
+    if (V.voiceBuf) ob.append(link("⬇️ आवाज मात्र", $("vVoicePlayer").src, `gpt-awaj-${stamp()}.${V.voiceExt || "mp3"}`));
+    ob.querySelectorAll("a").forEach(a => { a.className = "pick"; a.style.textDecoration = "none"; a.style.color = "inherit"; });
+    info.textContent = `तयार भयो! (${(blob.size / 1048576).toFixed(1)} MB, ${ext.toUpperCase()})` +
+      (ext === "webm" ? " · TikTok/YouTube मा webm पनि upload हुन्छ। नभए CapCut मा खोलेर mp4 export गर्नुहोस्।" : "");
+  } catch (err) {
+    console.error(err);
+    info.textContent = "⚠️ भिडियो बन्न सकेन: " + (err.message || err);
+    canvas.hidden = true; bar.hidden = true;
+  } finally {
+    if (actx) actx.close().catch(() => {});
+    V.busy = false; $("vRender").disabled = false;
+  }
+};
+
+setMode("chat");
+</script>
+</body>
+</html>
