@@ -18,13 +18,35 @@ const MODELS = {
 };
 const ACCESS_CODE = process.env.ACCESS_CODE || ""; // खाली भए जसले पनि चलाउन पाउँछ
 
+// ElevenLabs (Bunty जस्तो आवाज)
+const ELEVEN = {
+  key: process.env.ELEVENLABS_API_KEY || "",
+  voice: process.env.ELEVEN_VOICE_ID || "",
+  model: process.env.ELEVEN_MODEL || "eleven_v3",
+};
+const elevenReady = Boolean(ELEVEN.key && ELEVEN.voice);
+
 const ai = process.env.GEMINI_API_KEY
   ? new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
   : null;
 
-const CHAT_SYSTEM =
-  "तिमी GPT नामको सहयोगी AI हौ। प्रयोगकर्ताले नेपालीमा सोधे नेपालीमै, अंग्रेजीमा सोधे अंग्रेजीमै स्पष्ट, उपयोगी र इमानदार उत्तर देऊ। " +
-  "उत्तर सजिलो र व्यवस्थित राख। थाहा नभएको कुरा थाहा छैन भन। आफूले गर्न नसक्ने काम गरेको दाबी नगर।";
+const CHAT_SYSTEM = `तिमी GPT हौ: न्यानो, जिज्ञासु, इमानदार र साँच्चै काम लाग्ने सहयोगी AI।
+
+बोल्ने तरिका:
+- प्रयोगकर्ता जुन भाषामा लेख्छ (नेपाली, Romanized नेपाली वा अंग्रेजी), त्यही भाषामा उत्तर देऊ। Romanized नेपालीमा सोधे देवनागरीमा जवाफ देऊ।
+- सीधै मुख्य उत्तरबाट सुरु गर। "राम्रो प्रश्न!" जस्ता भूमिका नबाँध, प्रश्न नदोहोर्‍याऊ।
+- साथीसँग कुरा गरेझैँ सहज भाषा प्रयोग गर, तर काम परेको बेला व्यवस्थित र स्पष्ट होऊ।
+- सानो प्रश्नको छोटो उत्तर, ठूलो कामको पूरा र चरणबद्ध उत्तर देऊ। सूची तब मात्र बनाऊ जब त्यसले बुझ्न सजिलो बनाउँछ।
+- प्रश्न अस्पष्ट छ भने एउटा छोटो प्रश्न सोध, नत्र सबैभन्दा उचित अर्थ लगाएर काम गर।
+
+इमानदारी:
+- थाहा नभएको वा पक्का नभएको कुरा स्पष्ट भन। तथ्य, तथ्याङ्क वा समाचार आफैँ नबनाऊ।
+- तिम्रो जानकारी पुरानो हुन सक्छ; ताजा खबर, स्कोर वा मूल्य सोधे यो कुरा भन।
+- प्रयोगकर्ताको विचारमा कमजोरी देखे विनम्र भएर भन; खाली प्रशंसा नगर।
+- आफूले गर्न नसक्ने काम (इन्टरनेट खोज्ने, फाइल बचत गर्ने आदि) गरेको दाबी नगर।
+
+विशेष सीप: नेपाली क्रिकेट/खेल कन्टेन्ट, YouTube/TikTok स्क्रिप्ट, भिडियो आइडिया, समाचार लेखन, पढाइ, कोडिङ।
+भिडियो स्क्रिप्ट माग्दा: पहिलो ३ सेकेन्डमा ध्यान तान्ने hook, छोटा र जोसिला वाक्य, अन्त्यमा subscribe/follow गर्न आग्रह।`;
 
 const SITE_SYSTEM =
   "तिमी web developer हौ। प्रयोगकर्ताले भनेअनुसार एउटै पूरा HTML फाइल बनाऊ: CSS <style> भित्र र JavaScript <script> भित्र। " +
@@ -70,7 +92,7 @@ function fail(res, err, label) {
 
 function buildHistory(history) {
   const contents = [];
-  const recent = Array.isArray(history) ? history.slice(-12) : [];
+  const recent = Array.isArray(history) ? history.slice(-20) : [];
   for (const item of recent) {
     if (item?.role === "user" || item?.role === "model") {
       contents.push({ role: item.role, parts: [{ text: String(item.text || "").slice(0, 5000) }] });
@@ -109,7 +131,45 @@ function pcmToWav(pcm, sampleRate = 24000, channels = 1, bits = 16) {
 
 // ---------- API ----------
 app.get("/api/status", (_req, res) => {
-  res.json({ ready: Boolean(ai), needCode: Boolean(ACCESS_CODE), models: MODELS });
+  res.json({ ready: Boolean(ai), needCode: Boolean(ACCESS_CODE), eleven: elevenReady, models: MODELS });
+});
+
+// ElevenLabs बाट आवाज (Bunty)
+app.post("/api/eleven", (req, res, next) => {
+  if (ACCESS_CODE && req.get("x-access-code") !== ACCESS_CODE) {
+    return res.status(401).json({ error: "पहुँच कोड मिलेन।", needCode: true });
+  }
+  next();
+}, heavyLimiter, async (req, res) => {
+  try {
+    if (!elevenReady) {
+      return res.status(503).json({ error: "ElevenLabs सेट छैन। .env मा ELEVENLABS_API_KEY र ELEVEN_VOICE_ID राख्नुहोस्।" });
+    }
+    const text = String(req.body?.text || "").trim().slice(0, 3000);
+    if (!text) return res.status(400).json({ error: "आवाजमा बदल्ने लेख चाहिन्छ।" });
+
+    const r = await fetch(
+      `https://api.elevenlabs.io/v1/text-to-speech/${encodeURIComponent(ELEVEN.voice)}?output_format=mp3_44100_128`,
+      {
+        method: "POST",
+        headers: { "xi-api-key": ELEVEN.key, "Content-Type": "application/json", Accept: "audio/mpeg" },
+        body: JSON.stringify({ text, model_id: ELEVEN.model }),
+      }
+    );
+    if (!r.ok) {
+      const detail = await r.text().catch(() => "");
+      console.error("eleven:", r.status, detail.slice(0, 300));
+      let msg = "ElevenLabs बाट आवाज आउन सकेन।";
+      if (r.status === 401) msg = "ElevenLabs API key मिलेन।";
+      else if (r.status === 404) msg = "ElevenLabs voice ID भेटिएन। ELEVEN_VOICE_ID जाँच्नुहोस्।";
+      else if (/quota|credits/i.test(detail)) msg = "ElevenLabs को credit सकियो।";
+      return res.status(502).json({ error: msg });
+    }
+    const buf = Buffer.from(await r.arrayBuffer());
+    res.json({ audio: buf.toString("base64"), mimeType: "audio/mpeg" });
+  } catch (err) {
+    fail(res, err, "eleven:");
+  }
 });
 
 // १. कुराकानी (फोटो पनि पठाउन मिल्छ)
